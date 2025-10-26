@@ -16,7 +16,12 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Build APK with auto-confirm
+    - name: Pre-install Python dependencies
+      run: |
+        pip install --upgrade pip
+        pip install appdirs colorama>=0.3.3 jinja2 sh build toml packaging setuptools
+
+    - name: Build APK
       run: |
         yes | buildozer -v android debug
 
