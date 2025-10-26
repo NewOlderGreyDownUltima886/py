@@ -7,7 +7,7 @@ source.dir = .
 source.include_exts = py,png,jpg,kv,atlas,json,txt
 
 version = 0.1
-requirements = python3,kivy,requests,urllib3,chardet,idna,certifi,android
+requirements = python3,kivy,requests,kivymd,urllib3,chardet,idna,certifi,android
 
 [buildozer]
 log_level = 2
