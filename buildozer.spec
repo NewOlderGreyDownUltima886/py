@@ -21,13 +21,13 @@ sdk = 33
 # Разрешения
 android.permissions = INTERNET,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
 
-# Библиотеки
-android.gradle_dependencies = 
-android.add_src = 
-android.add_resources = 
+# Особые настройки
+android.accept_sdk_license = True
 
 [android:meta-data]
 android.allow_backup = true
 
 [android:activity]
 android.launch_mode = singleTop
+
+
