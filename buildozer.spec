@@ -22,9 +22,6 @@ android.accept_sdk_license = True
 # Разрешения
 android.permissions = INTERNET,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
 
-# Особые настройки
-android.accept_sdk_license = True
-
 [android:meta-data]
 android.allow_backup = true
 
