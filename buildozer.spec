@@ -1,5 +1,5 @@
 [app]
-title = Ассистент
+title = Ассистент 2.0
 package.name = assistant
 package.domain = ru.assistant
 
