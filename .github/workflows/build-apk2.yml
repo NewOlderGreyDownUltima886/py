@@ -10,16 +10,14 @@ jobs:
   build:
     runs-on: ubuntu-latest
     container:
-      image: beevelop/android:v2023.07.1
+      image: fabernovel/android:android-33-jdk-17
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install Python and Buildozer
+    - name: Install Buildozer
       run: |
-        apt-get update
-        apt-get install -y python3-pip
         pip3 install buildozer cython
 
     - name: Build APK
