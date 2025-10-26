@@ -19,20 +19,3 @@ minapi = 21
 android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,MANAGE_EXTERNAL_STORAGE
 android.orientation = portrait
 
-
-# Добавьте эти опции
-android.api = 33
-android.minapi = 21
-
-# Добавьте эти intent filters для работы с файлами
-android.manifest.intent_filters = <intent-filter>
-    <action android:name="android.intent.action.VIEW" />
-    <category android:name="android.intent.category.DEFAULT" />
-    <category android:name="android.intent.category.BROWSABLE" />
-    <data android:mimeType="text/plain" />
-</intent-filter>
-<intent-filter>
-    <action android:name="android.intent.action.OPEN_DOCUMENT" />
-    <category android:name="android.intent.category.DEFAULT" />
-    <data android:mimeType="*/*" />
-</intent-filter>
