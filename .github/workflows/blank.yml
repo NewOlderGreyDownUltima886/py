@@ -4,22 +4,39 @@ on: [push, workflow_dispatch]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Build with Buildozer
-        # Используйте действие ArtemSBulgakov/buildozer-action
-        uses: ArtemSBulgakov/buildozer-action@v1
-        with:
-          # Если buildozer.spec НЕ в корне, укажите директорию (workdir)
-          workdir: ''  # Оставьте пустым, если файл в корне
-          # command: buildozer android debug  # Команда по умолчанию
-          buildozer_version: stable  # Используйте стабильную версию
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-apk
-          path: bin/*.apk  # Buildozer по умолчанию создает APK в директории bin/
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          git zip unzip openjdk-11-jdk \
+          autoconf automake libtool pkg-config \
+          zlib1g-dev libncurses5-dev libncursesw5-dev \
+          libtinfo5 cmake libffi-dev libssl-dev \
+          python3-pip python3-setuptools
+
+    - name: Install Buildozer
+      run: |
+        pip install --upgrade pip
+        pip install buildozer cython
+
+    - name: Build APK
+      run: |
+        buildozer -v android debug
+      env:
+        APP_ANDROID_ACCEPT_SDK_LICENSE: 1
+
+    - name: Upload APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: app-apk
+        path: bin/*.apk
