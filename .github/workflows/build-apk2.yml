@@ -70,6 +70,15 @@ jobs:
         
         # Проверяем что aidl установлен
         ls -la $ANDROID_SDK_ROOT/build-tools/33.0.0/aidl*
+
+
+    - name: Debug Android installation
+      run: |
+        echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+        echo "PATH: $PATH"
+        find $ANDROID_SDK_ROOT -name "aidl" -type f 2>/dev/null || echo "aidl not found"
+        ls -la $ANDROID_SDK_ROOT/build-tools/*/aidl* 2>/dev/null || echo "No aidl in build-tools"
+
         
     - name: Build APK
       run: |
