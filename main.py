@@ -6,7 +6,20 @@ from kivy.uix.slider import Slider
 from kivy.core.clipboard import Clipboard
 import sys
 from kivy.utils import platform
-    
+
+
+# create_presplash.py
+from PIL import Image, ImageDraw
+
+def create_presplash():
+    img = Image.new('RGB', (1920, 1080), (30, 100, 200))
+    d = ImageDraw.Draw(img)
+    img.save('presplash.png')
+    print("presplash.png создан")
+
+create_presplash()
+
+
 # Проверка платформы перед импортом Android-специфичных модулей
 if platform == 'android':
     try:
@@ -25,6 +38,7 @@ Config.set('graphics', 'height', '800')
 Config.set('graphics', 'minimum_width', '360')
 Config.set('graphics', 'minimum_height', '640')
 Config.set('graphics', 'position', 'auto')
+Config.set('graphics', 'presplash', '')
 
 Config.set('graphics', 'maxfps', 60)
 Config.set('kivy', 'log_level', 'warning')
@@ -6227,7 +6241,7 @@ class TestApp(App):
                     else:
                         child.disabled_color = (0, 0, 0, 1)
                 self._update_buttons_in_widget(child) 
-                
+
     def force_portrait_orientation(self):
         """Принудительная установка портретной ориентации"""
         # Для Android
@@ -8153,4 +8167,3 @@ class RepeatWrongAnswersScreen(Screen):
 
 if __name__ == '__main__':
     TestApp().run()
-
