@@ -1,20 +1,33 @@
-import requests, re
+import requests
+import re
 import json
 from kivy.network.urlrequest import UrlRequest
-
 from kivy.uix.slider import Slider
-
 from kivy.core.clipboard import Clipboard
+import sys
+from kivy.utils import platform
+    
+# Проверка платформы перед импортом Android-специфичных модулей
+if platform == 'android':
+    try:
+        from android.permissions import request_permissions, Permission
+        from android.storage import app_storage_path
+        from jnius import autoclass
+    except ImportError as e:
+        print(f"Android modules not available: {e}")
 
 from kivy.config import Config
-Config.set('graphics', 'maxfps', 60)
-Config.set('kivy', 'log_level', 'warning')
+
+Config.set('graphics', 'orientation', 'portrait')
+Config.set('graphics', 'resizable', '1')  # разрешаем изменение размера
 Config.set('graphics', 'width', '360')
 Config.set('graphics', 'height', '800')
 Config.set('graphics', 'minimum_width', '360')
 Config.set('graphics', 'minimum_height', '640')
-Config.set('graphics', 'resizable', '1')
 Config.set('graphics', 'position', 'auto')
+
+Config.set('graphics', 'maxfps', 60)
+Config.set('kivy', 'log_level', 'warning')
 Config.set('kivy', 'exit_on_escape', '0')  # Отключаем автоматический выход по Escape
 
 from datetime import datetime
@@ -49,7 +62,21 @@ import random
 from kivy.graphics import Color, Rectangle, RoundedRectangle, Line
 
 from kivy.core.window import Window
-from kivy.utils import platform
+
+
+
+
+
+def get_app_storage_path():
+    """Получение пути к хранилищу приложения"""
+    if platform == 'android':
+        try:
+            from android.storage import app_storage_path
+            return app_storage_path()
+        except ImportError:
+            return os.path.dirname(os.path.abspath(__file__))
+    else:
+        return os.path.dirname(os.path.abspath(__file__))
 
 
 
@@ -153,8 +180,28 @@ class ModernFileChooser(BoxLayout):
         self.drop_rect.size = self.drop_area.size
     
     def open_file_chooser(self, instance):
-        SimpleFileChooserPopup(callback=self.callback).open()
-
+        if platform == 'android':
+            try:
+                self.open_android_file_chooser()
+            except Exception as e:
+                self.app.show_notification(f"Ошибка выбора файла: {str(e)}")
+                # Fallback to regular file chooser
+                SimpleFileChooserPopup(callback=self.callback).open()
+        else:
+            SimpleFileChooserPopup(callback=self.callback).open()
+    
+    def open_android_file_chooser(self):
+        """FileChooser для Android"""
+        try:
+            from jnius import autoclass
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            Intent = autoclass('android.content.Intent')
+            intent = Intent(Intent.ACTION_OPEN_DOCUMENT)
+            intent.addCategory(Intent.CATEGORY_OPENABLE)
+            intent.setType("*/*")
+            PythonActivity.mActivity.startActivityForResult(intent, 123)
+        except Exception as e:
+            raise e
 
 class SimpleFileChooserPopup(Popup):
     def __init__(self, callback, **kwargs):
@@ -3535,19 +3582,28 @@ class GigaChatSettingsScreen(Screen):
         self.app.show_quick_notification("Настройки GigaChat сохранены", 2)
     
     def test_connection(self, instance):
-        """Тестирование подключения к GigaChat с поддержкой Enter/Escape"""
+        """Тестирование подключения к GigaChat с проверкой интернета"""
+        
+        # 1. Проверяем настройки API
         if not self.app.gigachat_client_secret:
-            self.app.show_quick_notification("Сначала настройте Authorization Key (заканчивается на знак =)", 3)
+            self.app.show_quick_notification("Сначала настройте Authorization Key", 3)
             return
         
-        self.app.show_quick_notification("Тестирую подключение к GigaChat...", 2)
+        # 2. Проверяем интернет-соединение
+        if not self.app.is_internet_available():
+            self.app.show_quick_notification("❌ Нет интернет-соединения\nПроверьте подключение к сети", 3)
+            return
+        
+        # 3. Показываем уведомление о начале теста
+        self.app.show_quick_notification("🔍 Проверяем подключение к GigaChat...", 2)
         
         def test_gigachat(dt):
+            # 4. Проверяем токен
             access_token, error = self.app.get_gigachat_access_token()
             if error:
-                self._show_test_result_popup(f"Ошибка подключения к GigaChat:\n\n{error}", False)
+                self._show_test_result_popup(f"❌ Ошибка подключения к GigaChat:\n\n{error}", False)
             else:
-                self._show_test_result_popup("Подключение к GigaChat успешно!", True)
+                self._show_test_result_popup("✅ Подключение к GigaChat успешно!", True)
 
         Clock.schedule_once(test_gigachat, 0.1)
 
@@ -4134,6 +4190,85 @@ class TestApp(App):
     question_results = ListProperty([])
     wrong_questions = ListProperty([])
 
+
+    def is_internet_available(self):
+        """Проверка доступности интернета"""
+        try:
+            if platform == 'android':
+                return self._check_android_connectivity()
+            else:
+                return self._check_desktop_connectivity()
+        except Exception as e:
+            print(f"Ошибка проверки интернета: {e}")
+            return False
+    
+    def _check_android_connectivity(self):
+        """Проверка соединения на Android"""
+        try:
+            from jnius import cast
+            from jnius import autoclass
+            
+            Context = autoclass('android.content.Context')
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            activity = PythonActivity.mActivity
+            
+            connectivity_manager = cast(
+                'android.net.ConnectivityManager',
+                activity.getSystemService(Context.CONNECTIVITY_SERVICE)
+            )
+            
+            if connectivity_manager is None:
+                return False
+                
+            network_info = connectivity_manager.getActiveNetworkInfo()
+            return network_info is not None and network_info.isConnected()
+            
+        except Exception as e:
+            print(f"Ошибка проверки Android connectivity: {e}")
+            # Fallback к обычной проверке
+            return self._check_desktop_connectivity()
+    
+    def _check_desktop_connectivity(self):
+        """Проверка соединения на ПК/других платформах"""
+        try:
+            import socket
+            # Таймаут 5 секунд
+            socket.setdefaulttimeout(5)
+            # Пробуем подключиться к DNS Google
+            socket.create_connection(("8.8.8.8", 53))
+            return True
+        except OSError:
+            return False
+        finally:
+            # Возвращаем таймаут к значению по умолчанию
+            socket.setdefaulttimeout(None)
+
+    def on_start(self):
+        """Вызывается при запуске приложения"""
+        if platform == 'android':
+            self.request_android_permissions()
+    
+    def request_android_permissions(self):
+        """Запрос разрешений на Android"""
+        try:
+            if platform == 'android':
+                from android.permissions import request_permissions, Permission
+                
+                def callback(permissions, results):
+                    if all(results):
+                        print("Все разрешения предоставлены")
+                    else:
+                        print("Некоторые разрешения не предоставлены")
+                
+                request_permissions([
+                    Permission.INTERNET,
+                    Permission.WRITE_EXTERNAL_STORAGE, 
+                    Permission.READ_EXTERNAL_STORAGE
+                ], callback)
+        except ImportError:
+            print("Android permissions module not available")
+        except Exception as e:
+            print(f"Error requesting permissions: {e}")
 
     def update_all_screens_fonts(self):
         """Обновление размеров шрифтов на всех экранах"""
@@ -4842,9 +4977,45 @@ class TestApp(App):
             # Применяем тему по умолчанию
             self.apply_color_preset('green_soft')
 
+    def get_storage_path(self, filename):
+        """Получение полного пути к файлу с учетом платформы"""
+        base_path = get_app_storage_path()
+        return os.path.join(base_path, filename)
+
+
+    def lock_orientation(self):
+        """Блокировка ориентации на Android"""
+        try:
+            from jnius import autoclass
+            from jnius import cast
+            
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            activity = PythonActivity.mActivity
+            
+            Context = autoclass('android.content.Context')
+            WindowManager = autoclass('android.view.WindowManager')
+            
+            # Блокируем портретную ориентацию
+            activity.setRequestedOrientation(1)  # 1 = PORTRAIT
+        except Exception as e:
+            print(f"Не удалось заблокировать ориентацию: {e}")
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+
+        # Оптимизации для мобильных устройств
+        if platform == 'android' or platform == 'ios':
+            Config.set('graphics', 'maxfps', 60)
+            Config.set('kivy', 'log_level', 'warning')
+            # Увеличиваем таймауты для медленных устройств
+            self.key_press_delay = 0.8
+            self.lock_orientation()
+
+        storage_path = get_app_storage_path()
+        self.test_store = JsonStore(os.path.join(storage_path, 'tests_data.json'))
+        self.settings_store = JsonStore(os.path.join(storage_path, 'app_settings.json'))
+        self.wrong_answers_history = JsonStore(os.path.join(storage_path, 'wrong_answers_history.json'))
+
         self.screen_manager = None
         self.app = self
         
@@ -4941,6 +5112,10 @@ class TestApp(App):
             return True
         
         if key == 27:  # ESC или кнопка назад на Android
+
+            if platform == 'android':
+                return self.handle_android_back_button()
+            
             current_screen = self.screen_manager.current
             
             # Определяем, на каком экране находимся
@@ -4970,7 +5145,21 @@ class TestApp(App):
                 return True
         
         return False
-
+    
+    def handle_android_back_button(self):
+        """Обработка back-кнопки на Android"""
+        current_screen = self.screen_manager.current
+        
+        if current_screen == 'main':
+            self.show_exit_confirmation()
+            return True
+        elif current_screen in ['test', 'results', 'color_settings', 'statistics']:
+            self.screen_manager.current = 'main'
+            return True
+        elif current_screen == 'splash':
+            return True  # Игнорируем на заставке
+        
+        return False
 
     def show_exit_confirmation(self):
         """Показ подтверждения выхода из приложения с поддержкой Enter/Escape"""
@@ -5287,17 +5476,19 @@ class TestApp(App):
             return None
 
     def get_gigachat_access_token(self):
-        """Получение access token для GigaChat"""
+        """Получение access token для GigaChat с проверкой интернета"""
+        
+        # Предварительная проверка интернета
+        if not self.is_internet_available():
+            return None, "❌ Нет интернет-соединения\nПроверьте подключение к сети"
+        
         try:
             if not self.gigachat_client_secret:
                 return None, "Не настроен Authorization Key для GigaChat"
-            
 
-
+            # ... остальная часть метода без изменений ...
             import base64
-
             auth_key = f"{self.gigachat_client_secret}"
-            
             
             import uuid 
             headers = {
@@ -5307,55 +5498,63 @@ class TestApp(App):
                 "Authorization": f"Basic {auth_key}",
             }
             
-            data = {
-                'scope': 'GIGACHAT_API_PERS'
-            }
+            data = {'scope': 'GIGACHAT_API_PERS'}
             import urllib3
             urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-            
             try:
                 response = requests.post(
                     self.GIGACHAT_AUTH_URL,
                     headers=headers,
                     data=data,
                     verify=False,
-                    timeout=30
+                    timeout=30  # Таймаут 30 секунд
                 )
+            except requests.exceptions.ConnectionError:
+                return None, "❌ Ошибка подключения к серверу GigaChat\nПроверьте интернет-соединение"
+            except requests.exceptions.Timeout:
+                return None, "❌ Таймаут подключения к GigaChat\nСервер не отвечает"
             except UnicodeEncodeError:
-                error_msg = f"Ошибка в Authorization Key! Без латиницы, пожалуйста!"
-                return None, error_msg
-            except Exception:
-                error_msg = f"Ошибка в Authorization Key! Без баловства, пожалуйста!"
-                return None, error_msg
+                return None, "❌ Ошибка в Authorization Key! Используйте только латинские символы"
+            except Exception as e:
+                return None, f"❌ Ошибка сети: {str(e)}"
 
-            
             if response.status_code == 200:
                 token_data = response.json()
                 self.gigachat_access_token = token_data['access_token']
                 self.save_gigachat_settings()
                 return self.gigachat_access_token, None
             else:
-                error_msg = f"Ошибка авторизации: {response.status_code}"
+                error_msg = f"❌ Ошибка авторизации: {response.status_code}"
                 try:
                     error_detail = response.json()
-                    error_msg += f" - {error_detail}"
+                    error_msg += f"\n{error_detail}"
                 except:
-                    error_msg += f" - {response.text}"
+                    error_msg += f"\n{response.text}"
                 return None, error_msg
                 
-        except IndexError as e:
-            return None, f"Ошибка получения токена: {str(e)}"
+        except Exception as e:
+            return None, f"❌ Неожиданная ошибка: {str(e)}"
+
+
 
     def ask_gigachat(self, question_text, user_answers, correct_answers, all_answers):
-        """Запрос к GigaChat API для объяснения вопроса"""
+        """Запрос к GigaChat API для объяснения вопроса с проверкой интернета"""
         try:
+            # Предварительная проверка
             if not self.gigachat_enabled:
-                return "GigaChat отключен. Включите его в настройках."
-            prompt = self._build_gigachat_prompt(question_text, user_answers, correct_answers, all_answers)
+                return "❌ GigaChat отключен. Включите его в настройках."
+            
+            if not self.is_internet_available():
+                return "❌ Нет интернет-соединения\nПроверьте подключение к сети"
+            
+            # Получение токена
             access_token, error = self.get_gigachat_access_token()
             if error:
-                return error
+                return f"❌ Ошибка авторизации:\n{error}"
+            
+            # Формирование запроса
+            prompt = self._build_gigachat_prompt(question_text, user_answers, correct_answers, all_answers)
             headers = {
                 'Content-Type': 'application/json',
                 'Authorization': f'Bearer {access_token}',
@@ -5364,33 +5563,35 @@ class TestApp(App):
             
             data = {
                 'model': 'GigaChat-2',
-                'messages': [
-                    {
-                        'role': 'user',
-                        'content': prompt
-                    }
-                ],
+                'messages': [{'role': 'user', 'content': prompt}],
                 'max_tokens': 500,
                 'temperature': 0.7
             }
             
-            response = requests.post(
-                self.GIGACHAT_API_URL,
-                headers=headers,
-                data=json.dumps(data),
-                verify=False,
-                timeout=30
-            )
+            # Отправка запроса с обработкой ошибок сети
+            try:
+                response = requests.post(
+                    self.GIGACHAT_API_URL,
+                    headers=headers,
+                    data=json.dumps(data),
+                    verify=False,
+                    timeout=30  # Таймаут 30 секунд
+                )
+            except requests.exceptions.ConnectionError:
+                return "❌ Ошибка подключения к GigaChat\nПроверьте интернет-соединение"
+            except requests.exceptions.Timeout:
+                return "❌ Таймаут подключения к GigaChat\nСервер не отвежает"
             
             if response.status_code == 200:
                 response_data = response.json()
                 explanation = response_data['choices'][0]['message']['content']
                 return self._clean_gigachat_response(explanation)
             else:
-                return f"Ошибка API GigaChat: {response.status_code} - {response.text}"
+                return f"❌ Ошибка API GigaChat: {response.status_code}\n{response.text}"
                 
         except Exception as e:
-            return f"Ошибка подключения к GigaChat: {str(e)}"
+            return f"❌ Ошибка подключения к GigaChat:\n{str(e)}"
+
 
     def _build_gigachat_prompt(self, question_text, user_answers, correct_answers, all_answers):
         """Формирование промпта для GigaChat"""
@@ -5435,24 +5636,38 @@ class TestApp(App):
 
 
     def ask_neuro_network(self, instance):
-        """Обработчик кнопки 'Спросить у нейросети'"""
+        """Обработчик кнопки 'Спросить у нейросети' с проверкой интернета"""
+        
+        # 1. Проверяем базовые условия
         if not self.current_questions:
             self.show_quick_notification("Нет активного вопроса", 2)
             return
+            
         if not self.gigachat_enabled:
             self.show_quick_notification("GigaChat отключен. Включите его в настройках.", 3)
             return
         
+        # 2. Проверяем интернет-соединение
+        if not self.is_internet_available():
+            self.show_quick_notification("❌ Нет интернет-соединения\nПроверьте подключение к сети", 3)
+            return
+        
+        # 3. Проверяем выбранные ответы
         current_question = self.current_questions[self.current_question_index]
         question_text = current_question.text
         user_answer_indices = self.user_answers[self.current_question_index] or []
         user_answers = [current_question.answers[i] for i in user_answer_indices]
         correct_answers = [current_question.answers[i] for i in current_question.correct_indices]
         all_answers = current_question.answers
+        
         if not user_answers and not self.question_checked[self.current_question_index]:
             self.show_quick_notification("Сначала выберите ответы для получения объяснения", 3)
             return
-        self.show_quick_notification("Спрашиваем у GigaChat...", 2)
+        
+        # 4. Показываем уведомление о начале запроса
+        self.show_quick_notification("📡 Подключаемся к GigaChat...", 2)
+        
+        # 5. Запускаем запрос в отдельном потоке
         Clock.schedule_once(lambda dt: self._process_gigachat_request(
             question_text, user_answers, correct_answers, all_answers
         ), 0.1)
@@ -5476,6 +5691,11 @@ class TestApp(App):
     def show_gigachat_explanation(self, question_text, user_answers, correct_answers, all_answers, gigachat_explanation):
         """Показ структурированного объяснения от GigaChat"""
         try:
+            # Проверяем, нет ли ошибок соединения
+            if gigachat_explanation.startswith('❌'):
+                # Показываем ошибку как уведомление
+                self.app.show_notification(gigachat_explanation)
+                return
             if hasattr(self, '_current_notification') and self._current_notification:
                 try:
                     self._current_notification.dismiss()
@@ -6007,13 +6227,48 @@ class TestApp(App):
                     else:
                         child.disabled_color = (0, 0, 0, 1)
                 self._update_buttons_in_widget(child) 
-
+                
+    def force_portrait_orientation(self):
+        """Принудительная установка портретной ориентации"""
+        # Для Android
+        if platform == 'android':
+            try:
+                from jnius import autoclass
+                PythonActivity = autoclass('org.kivy.android.PythonActivity')
+                activity = PythonActivity.mActivity
+                # 1 = SCREEN_ORIENTATION_PORTRAIT
+                activity.setRequestedOrientation(1)
+                print("Ориентация заблокирована в портретном режиме")
+            except Exception as e:
+                print(f"Ошибка блокировки ориентации: {e}")
+        
+        # Для iOS (если нужно)
+        elif platform == 'ios':
+            try:
+                from pyobjus import autoclass
+                UIDevice = autoclass('UIDevice')
+                # На iOS сложнее, но можно попробовать
+                print("iOS: Рекомендуется настроить ориентацию в buildozer.spec")
+            except:
+                pass
+        
+        # Для ПК - настраиваем размер окна
+        else:
+            from kivy.core.window import Window
+            Window.size = (360, 800)
+            Window.minimum_width = 360
+            Window.minimum_height = 640
 
 
     def build(self):
+
+        # Блокируем ориентацию при запуске
+        self.force_portrait_orientation()
+
         self.screen_manager = ScreenManager(transition=SlideTransition())
         self.splash_screen = SplashScreen(name='splash')
         self.screen_manager.add_widget(self.splash_screen)
+    
         
         # ТЕПЕРЬ ЗАГРУЖАЕМ НАСТРОЙКИ ПОСЛЕ СОЗДАНИЯ screen_manager
         self.load_settings()
