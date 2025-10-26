@@ -27,19 +27,49 @@ jobs:
           openjdk-11-jdk \
           git \
           unzip \
-          zip
+          zip \
+          wget
         
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v2
-      
     - name: Install Buildozer
       run: |
         pip install --upgrade pip
         pip install buildozer cython
         
-    - name: Accept Android licenses
+    - name: Install Android SDK with precise setup
       run: |
-        yes | $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager --licenses
+        # Чистая установка Android SDK
+        mkdir -p ~/android-sdk
+        cd ~/android-sdk
+        
+        # Скачиваем tools
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+        unzip -q commandlinetools-linux-9477386_latest.zip
+        mkdir -p cmdline-tools/latest
+        mv cmdline-tools/* cmdline-tools/latest/
+        rmdir cmdline-tools
+        
+        # Настраиваем окружение
+        export ANDROID_SDK_ROOT=~/android-sdk
+        export ANDROID_HOME=~/android-sdk
+        export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
+        export PATH=$ANDROID_SDK_ROOT/build-tools/33.0.0:$PATH
+        export PATH=$ANDROID_SDK_ROOT/platform-tools:$PATH
+        
+        echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
+        echo "$ANDROID_SDK_ROOT/build-tools/33.0.0" >> $GITHUB_PATH
+        
+        # Принимаем лицензии
+        yes | sdkmanager --licenses
+        
+        # Устанавливаем компоненты
+        sdkmanager "build-tools;33.0.0"
+        sdkmanager "platforms;android-33"
+        sdkmanager "platform-tools"
+        
+        # Проверяем что aidl установлен
+        ls -la $ANDROID_SDK_ROOT/build-tools/33.0.0/aidl*
         
     - name: Build APK
       run: |
