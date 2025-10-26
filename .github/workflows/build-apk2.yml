@@ -9,20 +9,17 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    container:
+      image: python:3.9-bullseye
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.9'
-
     - name: Install system dependencies
       run: |
-        sudo apt-get update
-        sudo apt-get install -y \
+        apt-get update
+        apt-get install -y \
           openjdk-11-jdk \
           git \
           wget \
@@ -30,6 +27,7 @@ jobs:
           zip \
           libssl-dev \
           build-essential \
+          pkg-config \
           autoconf \
           automake \
           libtool
@@ -38,23 +36,22 @@ jobs:
       run: |
         pip install --upgrade pip
         pip install buildozer cython
-        pip install appdirs colorama>=0.3.3 jinja2 toml packaging setuptools
+        pip install appdirs colorama>=0.3.3 jinja2 sh toml packaging setuptools
 
     - name: Setup Android SDK
       run: |
-        mkdir -p ~/android-sdk
-        cd ~/android-sdk
+        mkdir -p /opt/android-sdk
+        cd /opt/android-sdk
         wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
         unzip -q commandlinetools-linux-9477386_latest.zip
         mkdir -p cmdline-tools/latest
         mv cmdline-tools/* cmdline-tools/latest/
         
-        echo "ANDROID_SDK_ROOT=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "PATH=$HOME/android-sdk/cmdline-tools/latest/bin:$PATH" >> $GITHUB_ENV
+        export ANDROID_SDK_ROOT=/opt/android-sdk
+        export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
         
         yes | sdkmanager --licenses
         sdkmanager "build-tools;33.0.0" "platforms;android-33" "platform-tools"
-        echo "$HOME/android-sdk/build-tools/33.0.0" >> $GITHUB_PATH
 
     - name: Build APK
       run: |
