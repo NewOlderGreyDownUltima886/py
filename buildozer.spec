@@ -17,6 +17,7 @@ api = 33
 minapi = 21
 ndk = 25b
 sdk = 33
+android.accept_sdk_license = True
 
 # Разрешения
 android.permissions = INTERNET,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE
