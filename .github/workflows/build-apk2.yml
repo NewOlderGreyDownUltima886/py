@@ -16,10 +16,14 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Pre-install Python dependencies
+    - name: Fix user permissions and install dependencies
       run: |
+        # Устанавливаем зависимости от имени root
         pip install --upgrade pip
-        pip install appdirs colorama>=0.3.3 jinja2 sh build toml packaging setuptools
+        pip install appdirs colorama>=0.3.3 jinja2 toml packaging setuptools
+        
+        # Устанавливаем sh отдельно
+        pip install "sh>=1.10,<2.0"
 
     - name: Build APK
       run: |
